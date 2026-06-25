@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เกมสมรภูมิสูตรคูณ AR v20.1 (ระบบนิ้วชี้ชี้นำทาง + ปุ่มควบคุมสมบูรณ์แบบ)</title>
+    <title>เกมสมรภูมิสูตรคูณ AR v20.2 (ปรับเวลาเป็น 15 วินาที - เหมาะสมที่สุดสำหรับเด็ก ๆ)</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;700;900&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -50,7 +50,7 @@
         .score-box { color: #ffeb3b; border-color: rgba(255, 235, 59, 0.4); background: rgba(255, 235, 59, 0.1); }
         .round-box { color: #00ffcc; border-color: rgba(0, 255, 204, 0.4); background: rgba(0, 255, 204, 0.1); }
 
-        /* แผงปุ่มกด เริ่ม/หยุด (ครูควบคุมได้) */
+        /* แผงปุ่มกด เริ่ม/หยุด */
         .control-panel { display: flex; gap: 10px; pointer-events: auto; }
         .btn-ctrl {
             border: none; padding: 6px 18px; font-size: 1rem; font-weight: bold; 
@@ -59,7 +59,7 @@
         .btn-pause { background: #e28743; }
         .btn-pause:hover { background: #cd722e; }
 
-        /* หลอดเวลา 6 วินาที */
+        /* หลอดเวลาขยายเป็น 15 วินาที */
         .timer-bar-container { width: 50%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-top: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
         .timer-bar { width: 100%; height: 100%; background: #00ffcc; box-shadow: 0 0 10px #00ffcc; }
 
@@ -136,16 +136,16 @@
         <div class="menu-card">
             <div style="font-size: 4rem; margin-bottom: 10px;">🐱🎯</div>
             <h2 id="loading-status">กำลังเชื่อมต่อสมองกล AI นิ้วชี้...</h2>
-            <p style="color: #cbd5e1; margin-bottom: 30px;" id="loading-sub">โปรดตรวจสอบว่าเปิดกล้องเว็บแคมเรียบร้อยแล้ว</p>
+            <p style="color: #cbd5e1; margin-bottom: 30px;" id="loading-sub">ปรับเวลาเป็นโหมดทบทวน 15 วินาที เหมาะกับนักเรียน ป.4-6 คิดเลขนุ่มนวลขึ้น</p>
             <button class="btn-main" id="start-btn" onclick="startGame()" style="display: none;">กดเพื่อเริ่มเปิดสมรภูมิเกม</button>
         </div>
     </div>
 
     <div class="overlay" id="summary-screen" style="display: none;">
         <div class="menu-card" style="border-color: #ff007f; box-shadow: 0 0 50px rgba(255,0,127,0.3);">
-            <div style="font-size: 4rem;">🏆🐱</div>
+            <div style="font-size: 4rem;">🏆🎉🐱</div>
             <h2>สรุปผลคะแนนสุดท้าย!</h2>
-            <div style="color: #cbd5e1; font-size: 1.2rem;">คะแนนรวมในสมรภูมิรอบนี้</div>
+            <div style="color: #cbd5e1; font-size: 1.2rem;">ยินดีด้วยกับนักเรียนผู้กล้าสูตรคูณทุก ๆ คน</div>
             <div class="score-big" id="final-score">0</div>
             <button class="btn-main" onclick="restartGame()">ท้าทายใหม่อีกครั้ง</button>
         </div>
@@ -153,10 +153,10 @@
 
     <div class="game-container">
         <div class="header">
-            <h1>เกมสมรภูมิสูตรคูณ AR v20.1 (โหมดนิ้วชี้เซนเซอร์)</h1>
+            <h1>เกมสมรภูมิสูตรคูณ AR v20.2 (โหมดชี้แช่ตอบ - 15 วินาที)</h1>
             <div class="player-panel">
                 <div class="info-box round-box" id="round-text">ข้อที่: 0/10</div>
-                <div class="info-box status-box" id="timer-text">เวลา: 6.0 วิ</div>
+                <div class="info-box status-box" id="timer-text">เวลา: 15.0 วิ</div>
                 <div class="info-box score-box" id="score-text">คะแนน: 0</div>
                 
                 <div class="control-panel">
@@ -189,19 +189,22 @@
         let currentRound = 0;
         const totalRounds = 10;
         let timerInterval;
-        let timeLeft = 6000; 
+        let timeLeft = 15000; // เปลี่ยนความยาวช่วงเวลาเป็น 15 วินาที (15000 มิลลิวินาที)
         let canAnswer = false;
         let isPaused = false; 
-        const speedDuration = 6000;
+        const speedDuration = 15000;
 
         let activeQuestions = []; 
         let currentQuestionObj = null;
         let audioCtx = null;
 
-        // ตัวแปรจับพิกัดชี้แช่ตอบ (v20.1)
+        // ระบบจับพิกัดชี้แช่ตอบ
         let currentHoveredIndex = -1;
         let hoverStartTime = 0;
         const requiredHoverTime = 800; // แช่นิ้วค้างที่ช้อยส์ 0.8 วินาที เพื่อตอบ
+
+        // ตัวแปรสำหรับจุดเอฟเฟกต์พลุ
+        let fireworks = [];
 
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('output_canvas');
@@ -211,7 +214,6 @@
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        // ระบบเสียงเพลงระทึกใจ ตื่นเต้น เร่งจังหวะอัตโนมัติเมื่อใกล้หมดเวลา
         function playTenseBeat(isUrgent) {
             if (!audioCtx || !canAnswer || isPaused) return;
             try {
@@ -257,16 +259,295 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
             if (results.image) canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            
+            // รันเอฟเฟกต์แอนิเมชันพลุฉลองตอนท้ายเกมบน Canvas หลัก
+            handleFireworksAnimation();
+
             canvasCtx.restore();
 
             let activeHover = -1;
 
-            // ถ้าระบบไม่ได้กดหยุดเกม และตรวจเจอมือนักเรียนในกล้อง
             if (!isPaused && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const landmarks = results.multiHandLandmarks[0];
-                
-                // พิกัดจุดปลายนิ้วชี้
                 const fingerX = (1 - landmarks[8].x) * canvasElement.width;
                 const fingerY = landmarks[8].y * canvasElement.height;
 
-                // วาด
+                for(let pt of landmarks){
+                    let ptX = (1 - pt.x) * canvasElement.width;
+                    let ptY = pt.y * canvasElement.height;
+                    canvasCtx.beginPath(); canvasCtx.arc(ptX, ptY, 4, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = '#00ffcc'; canvasCtx.fill();
+                }
+
+                canvasCtx.font = "50px Arial";
+                canvasCtx.textAlign = "center";
+                canvasCtx.textBaseline = "middle";
+                canvasCtx.fillText("🐾", fingerX, fingerY);
+
+                if (canAnswer) {
+                    for (let i = 0; i < 5; i++) {
+                        const box = document.getElementById(`choice-${i}`);
+                        const rect = box.getBoundingClientRect();
+                        if (fingerX >= rect.left && fingerX <= rect.right && fingerY >= rect.top && fingerY <= rect.bottom) {
+                            activeHover = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (canAnswer && !isPaused) {
+                handleHoverAction(activeHover);
+            }
+        }
+
+        function handleHoverAction(hoveredIndex) {
+            for (let i = 0; i < 5; i++) {
+                const box = document.getElementById(`choice-${i}`);
+                const chargeBar = box.querySelector('.hover-charge');
+                
+                if (i === hoveredIndex) {
+                    box.classList.add('hand-hover');
+                } else {
+                    box.classList.remove('hand-hover');
+                    chargeBar.style.width = '0%';
+                }
+            }
+
+            if (hoveredIndex !== -1) {
+                if (currentHoveredIndex !== hoveredIndex) {
+                    currentHoveredIndex = hoveredIndex;
+                    hoverStartTime = Date.now();
+                } else {
+                    const elapsed = Date.now() - hoverStartTime;
+                    const percent = Math.min((elapsed / requiredHoverTime) * 100, 100);
+                    document.getElementById(`choice-${hoveredIndex}`).querySelector('.hover-charge').style.width = `${percent}%`;
+
+                    if (elapsed >= requiredHoverTime) {
+                        document.getElementById(`choice-${hoveredIndex}`).querySelector('.hover-charge').style.width = '0%';
+                        checkAnswer(hoveredIndex);
+                    }
+                }
+            } else {
+                currentHoveredIndex = -1;
+            }
+        }
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 1280, height: 720
+        });
+
+        camera.start().then(() => {
+            document.getElementById('loading-status').innerText = "ระบบเซนเซอร์ 15 วินาทีเสร็จสมบูรณ์! 🐾";
+            document.getElementById('loading-sub').innerText = "กดปุ่มเพื่อพานักเรียนเข้าสู่การประลองความลื่นไหลได้เลยค่ะคุณครู Meow";
+            document.getElementById('start-btn').style.display = 'inline-block';
+        }).catch(err => {
+            document.getElementById('loading-status').innerText = "โปรดกดยอมรับสิทธิ์ใช้งานกล้องเว็บแคมด้านบนช่องลิงก์ครับ";
+        });
+
+        function generateQuestionPool() {
+            let pool = [];
+            for (let m = 2; m <= 12; m++) {
+                for (let n = 2; n <= 12; n++) {
+                    pool.push({ num1: m, num2: n, ans: m * n });
+                }
+            }
+            pool.sort(() => Math.random() - 0.5);
+            return pool.slice(0, 100);
+        }
+
+        function startGame() {
+            initAudio();
+            document.getElementById('start-screen').style.display = 'none';
+            restartGame();
+        }
+
+        function togglePause() {
+            if (!canAnswer) return; 
+            isPaused = !isPaused;
+            const pauseBtn = document.getElementById('pause-btn');
+            
+            if (isPaused) {
+                pauseBtn.innerText = "เล่นต่อ";
+                pauseBtn.style.background = "#00ffcc"; pauseBtn.style.color = "#0f172a";
+                clearInterval(timerInterval);
+                document.getElementById('question-box').innerText = "⏸️ หยุดเกมชั่วคราว";
+            } else {
+                pauseBtn.innerText = "หยุดเกม";
+                pauseBtn.style.background = "#e28743"; pauseBtn.style.color = "white";
+                document.getElementById('question-box').innerText = `${currentQuestionObj.num1} × ${currentQuestionObj.num2} = ?`;
+                runTimerLoop(timeLeft);
+            }
+        }
+
+        function nextQuestion() {
+            currentRound++;
+            if (currentRound > totalRounds) {
+                endGame();
+                return;
+            }
+
+            document.getElementById('round-text').innerText = `ข้อที่: ${currentRound}/${totalRounds}`;
+            canAnswer = true; isPaused = false;
+            timeLeft = speedDuration; currentHoveredIndex = -1;
+
+            const pauseBtn = document.getElementById('pause-btn');
+            pauseBtn.innerText = "หยุดเกม";
+            pauseBtn.style.background = "#e28743"; pauseBtn.style.color = "white";
+            
+            for (let i = 0; i < 5; i++) {
+                document.getElementById(`choice-${i}`).className = "choice-box";
+                document.getElementById(`choice-${i}`).querySelector('.hover-charge').style.width = '0%';
+            }
+
+            currentQuestionObj = activeQuestions[currentRound - 1];
+            document.getElementById('question-box').innerText = `${currentQuestionObj.num1} × ${currentQuestionObj.num2} = ?`;
+
+            let answersSet = new Set([currentQuestionObj.ans]);
+            while(answersSet.size < 5) {
+                const offset = (Math.floor(Math.random() * 7) - 3) * (Math.random() > 0.5 ? 1 : currentQuestionObj.num1);
+                const fakeAns = currentQuestionObj.ans + offset;
+                if(fakeAns > 0 && fakeAns !== currentQuestionObj.ans) answersSet.add(fakeAns);
+            }
+
+            const answersArray = Array.from(answersSet).sort(() => Math.random() - 0.5);
+            for (let i = 0; i < 5; i++) {
+                document.getElementById(`choice-${i}`).querySelector('.text').innerText = answersArray[i];
+                document.getElementById(`choice-${i}`).dataset.val = answersArray[i];
+            }
+
+            clearInterval(timerInterval);
+            runTimerLoop(speedDuration);
+        }
+
+        function runTimerLoop(durationAvailable) {
+            const startTime = Date.now();
+            const originalTimeLeft = durationAvailable;
+            let lastBeatTime = 0;
+
+            timerInterval = setInterval(() => {
+                if (isPaused) return;
+
+                const elapsed = Date.now() - startTime;
+                timeLeft = originalTimeLeft - elapsed;
+
+                if (timeLeft <= 0) {
+                    timeLeft = 0;
+                    clearInterval(timerInterval);
+                    timeOutAction();
+                }
+
+                document.getElementById('timer-text').innerText = `เวลา: ${(timeLeft / 1000).toFixed(1)} วิ`;
+                const percentage = (timeLeft / speedDuration) * 100;
+                const timerBar = document.getElementById('timer-bar');
+                timerBar.style.width = `${percentage}%`;
+
+                // ส่งเสียงเตือนตื่นเต้นเฉพาะเมื่อเวลาเหลือน้อยกว่า 3 วินาทีสุดท้าย (3000 มิลลิวินาที)
+                let beatInterval = timeLeft < 3000 ? 250 : 600; 
+                if (elapsed - lastBeatTime > beatInterval) {
+                    playTenseBeat(timeLeft < 3000);
+                    lastBeatTime = elapsed;
+                }
+
+                timerBar.style.background = percentage < 35 ? "#ff007f" : "#00ffcc";
+            }, 30);
+        }
+
+        function checkAnswer(index) {
+            if (!canAnswer) return;
+            canAnswer = false;
+            clearInterval(timerInterval);
+
+            const selectedBox = document.getElementById(`choice-${index}`);
+            const selectedValue = parseInt(selectedBox.dataset.val);
+            const currentAnswer = currentQuestionObj.ans;
+
+            if (selectedValue === currentAnswer) {
+                score += 10;
+                selectedBox.className = "choice-box correct";
+                playSfx('correct');
+            } else {
+                selectedBox.className = "choice-box wrong";
+                highlightCorrectAnswer();
+                playSfx('wrong');
+            }
+
+            document.getElementById('score-text').innerText = `คะแนน: ${score}`;
+            setTimeout(nextQuestion, 1500);
+        }
+
+        function timeOutAction() {
+            if (!canAnswer) return;
+            canAnswer = false;
+            playSfx('wrong');
+            highlightCorrectAnswer();
+            setTimeout(nextQuestion, 1500);
+        }
+
+        function highlightCorrectAnswer() {
+            const currentAnswer = currentQuestionObj.ans;
+            for (let i = 0; i < 5; i++) {
+                const box = document.getElementById(`choice-${i}`);
+                box.className = (parseInt(box.dataset.val) === currentAnswer) ? 'choice-box correct' : 'choice-box wrong';
+            }
+        }
+
+        // ระบบจุดพลุฉลองแอนิเมชันความสำเร็จท้ายเกม
+        function triggerFireworkSplashes() {
+            fireworks = [];
+            for (let i = 0; i < 6; i++) {
+                setTimeout(() => {
+                    let centerX = Math.random() * canvasElement.width;
+                    let centerY = Math.random() * (canvasElement.height * 0.6);
+                    let color = `hsl(${Math.random() * 360}, 100%, 60%)`;
+                    for (let p = 0; p < 25; p++) {
+                        let angle = Math.random() * Math.PI * 2;
+                        let speed = Math.random() * 4 + 2;
+                        fireworks.push({
+                            x: centerX, y: centerY,
+                            vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+                            alpha: 1, color: color
+                        });
+                    }
+                }, i * 400);
+            }
+        }
+
+        function handleFireworksAnimation() {
+            if (fireworks.length === 0) return;
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                let p = fireworks[i];
+                p.x += p.vx; p.y += p.vy; p.vy += 0.05; // แรงโน้มถ่วงพลุร่วงหล่น
+                p.alpha -= 0.015;
+                if (p.alpha <= 0) {
+                    fireworks.splice(i, 1);
+                    continue;
+                }
+                // ต้องวาดแบบ Mirror กลับเพื่อให้เข้ากับระบบ Canvas หน้าจอ
+                canvasCtx.beginPath();
+                canvasCtx.arc(canvasElement.width - p.x, p.y, 4, 0, Math.PI * 2);
+                canvasCtx.fillStyle = p.color;
+                canvasCtx.globalAlpha = p.alpha;
+                canvasCtx.fill();
+                canvasCtx.globalAlpha = 1.0;
+            }
+        }
+
+        function endGame() {
+            document.getElementById('summary-screen').style.display = 'flex';
+            document.getElementById('final-score').innerText = `${score} / 100 แต้ม`;
+            triggerFireworkSplashes(); // ยิงพลุฉลองทันที
+        }
+
+        function restartGame() {
+            score = 0; currentRound = 0; currentHoveredIndex = -1; isPaused = false; fireworks = [];
+            let masterPool = generateQuestionPool();
+            activeQuestions = masterPool.slice(0, 10);
+            document.getElementById('score-text').innerText = `คะแนน: 0`;
+            document.getElementById('summary-screen').style.display = 'none';
+            nextQuestion();
+        }
+    </script>
+</body>
+</html>
