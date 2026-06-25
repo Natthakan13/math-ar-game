@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมสมรภูมิสูตรคูณ AR v19 (ระบบแตะดูดคำตอบใส่ตะกร้า - เล่นง่ายขึ้น 3 เท่า)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Kanit', sans-serif; 
+            transition: transform 0.1s ease, background-color 0.15s ease;
+            user-select: none;
+        }
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background-color: #0b0f19;
+        }
+        
+        /* เลเยอร์กล้อง */
+        .video-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #webcam { transform: scaleX(-1); visibility: hidden; width: 0; height: 0; position: absolute; }
+        #output_canvas { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; opacity: 0.55; }
+
+        /* อินเตอร์เฟสเกม */
+        .game-container {
+            position: relative; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            align-items: center; padding: 20px; z-index: 10; pointer-events: none;
+        }
+
+        .header { text-align: center; width: 100%; }
+        .header h1 { 
+            margin: 5px 0 0 0; font-size: 2.5rem; font-weight: 900;
+            background: linear-gradient(to right, #ff007f, #ffaa00, #00ffcc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+        }
+        
+        .player-panel { display: flex; gap: 15px; justify-content: center; margin-top: 8px; align-items: center; }
+        .info-box {
+            font-size: 1.2rem; font-weight: bold; background: rgba(13, 17, 23, 0.9); color: #fff;
+            padding: 8px 25px; border-radius: 50px; border: 2px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(8px);
+        }
+        .status-box { color: #ff007f; border-color: rgba(255, 0, 127, 0.4); background: rgba(255, 0, 127, 0.15); min-width: 140px; text-align: center; }
+        .score-box { color: #ffeb3b; border-color: rgba(255, 235, 59, 0.4); background: rgba(255, 235, 59, 0.1); }
+        .round-box { color: #00ffcc; border-color: rgba(0, 255, 204, 0.4); background: rgba(0, 255, 204, 0.1); }
+
+        /* หลอดเวลา 6 วินาที */
+        .timer-bar-container { width: 50%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-top: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
+        .timer-bar { width: 100%; height: 100%; background: #00ffcc; box-shadow: 0 0 10px #00ffcc; }
+
+        /* โซนโจทย์ */
+        .question-zone {
+            display: flex; align-items: center; gap: 20px; background: rgba(255, 255, 255, 0.95); 
+            padding: 15px 50px; border-radius: 30px; border: 5px solid #ff007f;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5); margin: 10px 0; max-width: 80%;
+        }
+        .cat-avatar { font-size: 3.5rem; animation: bounce 0.5s infinite alternate; }
+        .question-display { font-size: 4rem; font-weight: 900; color: #0f172a; }
+        
+        /* การกระจายตัวเลือก 5 ปุ่ม */
+        .answers-container {
+            display: flex; width: 100%; justify-content: center; max-width: 1200px; 
+            gap: 20px; flex-direction: row; padding: 10px 0; align-items: center; position: relative;
+        }
+
+        .choice-box {
+            flex: 1; padding: 25px 10px; border-radius: 25px; font-size: 3.8rem; font-weight: 900; 
+            text-align: center; color: white; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px); border: 3px solid rgba(255, 255, 255, 0.2);
+            position: relative; transform-origin: center;
+        }
+        #choice-0 { background: rgba(255, 0, 85, 0.4); }
+        #choice-1 { background: rgba(0, 153, 255, 0.4); }
+        #choice-2 { background: rgba(255, 170, 0, 0.4); }
+        #choice-3 { background: rgba(204, 0, 255, 0.4); }
+        #choice-4 { background: rgba(0, 255, 153, 0.4); }
+
+        /* เอฟเฟกต์เมื่อเลือกวัตถุลอยติดมือแล้ว */
+        .choice-box.grabbed {
+            border-color: #fff !important; box-shadow: 0 0 40px #00ffff !important;
+            transform: scale(0.7) !important; opacity: 0.5; background: #334155 !important;
+        }
+
+        /* ตะกร้ารองรับคำตอบ */
+        .basket-zone {
+            display: flex; justify-content: center; align-items: center; width: 100%; margin-bottom: 10px;
+        }
+        .basket-box {
+            background: rgba(15, 23, 42, 0.95); border: 4px dashed #00ffcc; color: #00ffcc;
+            padding: 15px 60px; border-radius: 30px; font-size: 1.8rem; font-weight: bold;
+            box-shadow: 0 0 25px rgba(0,255,204,0.3); display: flex; align-items: center; gap: 15px;
+        }
+        .basket-box.hovered {
+            background: rgba(0, 255, 204, 0.3) !important; border-color: #fff !important; box-shadow: 0 0 40px #00ffcc !important; transform: scale(1.05);
+        }
+
+        .correct { background: linear-gradient(135deg, rgba(0, 230, 118, 0.9), rgba(0, 126, 64, 0.9)) !important; border-color: #fff !important; box-shadow: 0 0 40px #00e676 !important; }
+        .wrong { background: rgba(239, 68, 68, 0.6) !important; border-color: rgba(255, 255, 255, 0.1) !important; }
+
+        /* ป๊อปอัพหน้าจอ */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 15, 25, 0.98); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .menu-card {
+            background: rgba(30, 41, 59, 0.9); padding: 40px 60px; border-radius: 30px;
+            border: 4px solid #ff007f; text-align: center; box-shadow: 0 0 50px rgba(255,0,127,0.3); max-width: 580px; width: 90%;
+        }
+        .menu-card h2 { font-size: 2.8rem; margin: 0 0 15px 0; font-weight: 900; background: linear-gradient(to right, #ff007f, #ffaa00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .btn-main {
+            background: linear-gradient(to right, #00ffcc, #0099ff); color: #0f172a; pointer-events: auto;
+            border: none; padding: 15px 50px; font-size: 1.6rem; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 5px 20px rgba(0,255,204,0.4);
+        }
+        .score-big { font-size: 5.5rem; font-weight: 900; color: #ffeb3b; margin: 15px 0; text-shadow: 0 0 20px rgba(255,235,59,0.3); }
+
+        @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+    </style>
+</head>
+<body>
+
+    <div class="video-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <div class="overlay" id="start-screen">
+        <div class="menu-card">
+            <div style="font-size: 4rem; margin-bottom: 10px;">🐱🧺</div>
+            <h2 id="loading-status">กำลังเซ็ตติ้งสมรภูมิตะกร้าแมว v19...</h2>
+            <p style="color: #cbd5e1; margin-bottom: 30px;" id="loading-sub">ปรับปรุงระบบใหม่ แตะปุ๊บดูดปั๊บ ไม่หลุดกลางทางแน่นอน!</p>
+            <button class="btn-main" id="start-btn" onclick="startGame()" style="display: none;">เข้าสู่สมรภูมิสูตรคูณ</button>
+        </div>
+    </div>
+
+    <div class="overlay" id="summary-screen" style="display: none;">
+        <div class="menu-card" style="border-color: #00ffcc; box-shadow: 0 0 50px rgba(0,255,204,0.3);">
+            <div style="font-size: 4rem;">🏆🐱</div>
+            <h2>สรุปผลการรบสูตรคูณ!</h2>
+            <div style="color: #cbd5e1;">คะแนนรวมของนักเรียน</div>
+            <div class="score-big" id="final-score">0</div>
+            <button class="btn-main" onclick="restartGame()">ท้าทายอีกรอบ</button>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <div class="header">
+            <h1>เกมสมรภูมิสูตรคูณ AR v19 (Smart Snap)</h1>
+            <div class="player-panel">
+                <div class="info-box round-box" id="round-text">ข้อที่: 0/10</div>
+                <div class="info-box status-box" id="timer-text">เวลา: 6.0 วิ</div>
+                <div class="info-box score-box" id="score-text">คะแนน: 0</div>
+            </div>
+            <div style="display: flex; justify-content: center; width: 100%;">
+                <div class="timer-bar-container">
+                    <div class="timer-bar" id="timer-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="question-zone">
+            <div class="cat-avatar">🐱</div>
+            <div class="question-display" id="question-box">กำลังสุ่มโจทย์...</div>
+        </div>
+
+        <div class="answers-container" id="box-zone">
+            <div class="choice-box" id="choice-0"><span>A</span><div class="text">-</div></div>
+            <div class="choice-box" id="choice-1"><span>B</span><div class="text">-</div></div>
+            <div class="choice-box" id="choice-2"><span>C</span><div class="text">-</div></div>
+            <div class="choice-box" id="choice-3"><span>D</span><div class="text">-</div></div>
+            <div class="choice-box" id="choice-4"><span>E</span><div class="text">-</div></div>
+        </div>
+
+        <div class="basket-zone">
+            <div class="basket-box" id="basket"><span style="font-size: 2.2rem;">🧺</span> นำอุ้งเท้าแมวมาแตะตรงนี้ เพื่อส่งคำตอบลงตะกร้า!</div>
+        </div>
+    </div>
+
+    <script>
+        let score = 0;
+        let currentRound = 0;
+        const totalRounds = 10;
+        let timerInterval;
+        let timeLeft = 6000; 
+        let canAnswer = false;
+        const speedDuration = 6000;
+
+        let activeQuestions = []; 
+        let currentQuestionObj = null;
+        let audioCtx = null;
+
+        // ตัวแปรระบบ Smart Snap (v19)
+        let grabbedIndex = -1; 
+        let grabbedValueText = ""; 
+
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playTenseBeat(isUrgent) {
+            if (!audioCtx || !canAnswer) return;
+            try {
+                let osc = audioCtx.createOscillator();
+                let gainNode = audioCtx.createGain();
+                osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(isUrgent ? 90 : 70, audioCtx.currentTime); 
+                gainNode.gain.setValueAtTime(isUrgent ? 0.45 : 0.25, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (isUrgent ? 0.12 : 0.22));
+                osc.start(); osc.stop(audioCtx.currentTime + (isUrgent ? 0.12 : 0.22));
+            } catch(e) {}
+        }
+
+        function playSfx(type) {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator();
+            let gainNode = audioCtx.createGain();
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+            if (type === 'correct') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+                osc
