@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เกมสมรภูมิภาษาอังกฤษ AR v20.3 (ระบบนิ้วชี้เซนเซอร์)</title>
+    <title>เกมสมรภูมิภาษาอังกฤษ AR v20.4 (ระบบนิ้วชี้เซนเซอร์ - แก้ไขบั๊กหน้าจอนิ่ง)</title>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;700;900&display=swap" rel="stylesheet">
     
-   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <!-- สคริปต์ AI ตรวจจับมือมาตรฐานของ Google -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <style>
         * { 
@@ -72,7 +73,7 @@
         .cat-avatar { font-size: 3.2rem; animation: bounce 0.5s infinite alternate; }
         .question-display { font-size: 2.5rem; font-weight: 900; color: #0f172a; line-height: 1.3; }
         
-        /* กล่องคำตอบ 4 ตัวเลือก (A-D ปรับขนาดให้เหมาะกับข้อความภาษาอังกฤษ) */
+        /* กล่องคำตอบ 4 ตัวเลือก */
         .answers-container {
             display: flex; width: 100%; justify-content: center; max-width: 1200px; 
             gap: 15px; flex-direction: row; padding: 15px 0; min-height: 190px; align-items: center;
@@ -131,6 +132,7 @@
         <canvas id="output_canvas"></canvas>
     </div>
 
+    <!-- หน้าจอดาวน์โหลด AI -->
     <div class="overlay" id="start-screen">
         <div class="menu-card">
             <div style="font-size: 4rem; margin-bottom: 10px;">🇬🇧🎯</div>
@@ -140,6 +142,7 @@
         </div>
     </div>
 
+    <!-- หน้าต่างสรุปผลคะแนนตอนสุดท้าย -->
     <div class="overlay" id="summary-screen" style="display: none;">
         <div class="menu-card" style="border-color: #ff007f; box-shadow: 0 0 50px rgba(255,0,127,0.3);">
             <div style="font-size: 4rem;">🏆🎉✨</div>
@@ -150,6 +153,7 @@
         </div>
     </div>
 
+    <!-- อินเตอร์เฟสควบคุมหลัก -->
     <div class="game-container">
         <div class="header">
             <h1>เกมสมรภูมิภาษาอังกฤษ AR ป.4-6 (โหมดชี้แช่ตอบ)</h1>
@@ -206,7 +210,6 @@
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
 
-        // คลังโจทย์ข้อสอบภาษาอังกฤษ ป.4-6 (10 ข้อพร้อมเฉลย) คุณครูสามารถมาแก้ข้อความตรงนี้เพิ่มเองได้ในอนาคตค่ะ
         const englishQuestionsPool = [
             { q: 'สัตว์ชนิดใดคือ "Elephant"?', choices: ['ช้าง', 'ม้า', 'ลิง', 'เสือ'], ans: 'ช้าง' },
             { q: 'What fruit is yellow and long?', choices: ['Apple', 'Banana', 'Orange', 'Mango'], ans: 'Banana' },
@@ -240,20 +243,22 @@
 
         function playSfx(type) {
             if (!audioCtx) return;
-            let osc = audioCtx.createOscillator();
-            let gainNode = audioCtx.createGain();
-            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
-            if (type === 'correct') {
-                osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
-                osc.frequency.exponentialRampToValueAtTime(1100, audioCtx.currentTime + 0.2); 
-                gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
-            } else {
-                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(170, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.25);
-                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            }
-            gainNode.gain.exponentialRampToValueAtTime(0.01, applicationCache.status ? 0.01 : 0.3);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            try {
+                let osc = audioCtx.createOscillator();
+                let gainNode = audioCtx.createGain();
+                osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+                if (type === 'correct') {
+                    osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+                    osc.frequency.exponentialRampToValueAtTime(1100, audioCtx.currentTime + 0.2); 
+                    gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                } else {
+                    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(170, audioCtx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.25);
+                    gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                }
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } catch(e) {}
         }
 
         const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
@@ -401,7 +406,6 @@
             currentQuestionObj = activeQuestions[currentRound - 1];
             document.getElementById('question-box').innerText = currentQuestionObj.q;
 
-            // ผสมช้อยส์ 4 ตัวเลือก
             let answersArray = [...currentQuestionObj.choices];
             answersArray.sort(() => Math.random() - 0.5);
 
@@ -466,7 +470,7 @@
             }
 
             document.getElementById('score-text').innerText = `คะแนน: ${score}`;
-            setTimeout(nextQuestion, 2000); // เว้นจังหวะอ่านเฉลยคำศัพท์ 2 วินาทีก่อนขึ้นข้อใหม่ค่ะ
+            setTimeout(nextQuestion, 2000); 
         }
 
         function timeOutAction() {
@@ -532,7 +536,6 @@
 
         function restartGame() {
             score = 0; currentRound = 0; currentHoveredIndex = -1; isPaused = false; fireworks = [];
-            // ดึงโจทย์ชุดภาษาอังกฤษมาสลับตำแหน่ง
             activeQuestions = [...englishQuestionsPool].sort(() => Math.random() - 0.5);
             document.getElementById('score-text').innerText = `คะแนน: 0`;
             document.getElementById('summary-screen').style.display = 'none';
