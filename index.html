@@ -474,7 +474,7 @@
             }
 
             document.getElementById('score-text').innerText = `คะแนน: ${score}`;
-            setTimeout(nextQuestion, 1500);
+            setTimeout(nextQuestion, 4000);
         }
 
         function timeOutAction() {
@@ -482,7 +482,7 @@
             canAnswer = false;
             playSfx('wrong');
             highlightCorrectAnswer();
-            setTimeout(nextQuestion, 1500);
+            setTimeout(nextQuestion, 4000);
         }
 
         function highlightCorrectAnswer() {
