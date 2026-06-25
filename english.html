@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมสมรภูมิภาษาอังกฤษ AR v20.3 (ระบบนิ้วชี้เซนเซอร์)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Kanit', sans-serif; 
+            transition: transform 0.1s ease, background-color 0.15s ease;
+            user-select: none;
+        }
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background-color: #0b0f19;
+        }
+        
+        /* เลเยอร์กล้องถ่ายภาพ */
+        .video-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #webcam { transform: scaleX(-1); visibility: hidden; width: 0; height: 0; position: absolute; }
+        #output_canvas { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; opacity: 0.55; }
+
+        /* หน้าต่างอินเตอร์เฟสเกมหลัก */
+        .game-container {
+            position: relative; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: space-between;
+            align-items: center; padding: 20px; z-index: 10; pointer-events: none;
+        }
+
+        .header { text-align: center; width: 100%; }
+        .header h1 { 
+            margin: 5px 0 0 0; font-size: 2.3rem; font-weight: 900;
+            background: linear-gradient(to right, #00ffcc, #ff007f);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+        }
+        
+        .player-panel { display: flex; gap: 12px; justify-content: center; margin-top: 8px; align-items: center; }
+        .info-box {
+            font-size: 1.2rem; font-weight: bold; background: rgba(13, 17, 23, 0.9); color: #fff;
+            padding: 6px 20px; border-radius: 50px; border: 2px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(8px);
+        }
+        .status-box { color: #ff007f; border-color: rgba(255, 0, 127, 0.4); background: rgba(255, 0, 127, 0.15); min-width: 130px; text-align: center; }
+        .score-box { color: #ffeb3b; border-color: rgba(255, 235, 59, 0.4); background: rgba(255, 235, 59, 0.1); }
+        .round-box { color: #00ffcc; border-color: rgba(0, 255, 204, 0.4); background: rgba(0, 255, 204, 0.1); }
+
+        /* แผงปุ่มกด เริ่ม/หยุด */
+        .control-panel { display: flex; gap: 10px; pointer-events: auto; }
+        .btn-ctrl {
+            border: none; padding: 6px 18px; font-size: 1rem; font-weight: bold; 
+            border-radius: 20px; cursor: pointer; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .btn-pause { background: #e28743; }
+        .btn-pause:hover { background: #cd722e; }
+
+        /* หลอดเวลา 15 วินาที */
+        .timer-bar-container { width: 50%; height: 14px; background: rgba(255,255,255,0.1); border-radius: 10px; margin-top: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
+        .timer-bar { width: 100%; height: 100%; background: #00ffcc; box-shadow: 0 0 10px #00ffcc; }
+
+        /* โซนแสดงโจทย์ */
+        .question-zone {
+            display: flex; align-items: center; gap: 15px; background: rgba(255, 255, 255, 0.95); 
+            padding: 15px 45px; border-radius: 25px; border: 4px solid #00ffcc;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5); margin: 5px 0; max-width: 85%; text-align: center;
+        }
+        .cat-avatar { font-size: 3.2rem; animation: bounce 0.5s infinite alternate; }
+        .question-display { font-size: 2.5rem; font-weight: 900; color: #0f172a; line-height: 1.3; }
+        
+        /* กล่องคำตอบ 4 ตัวเลือก (A-D ปรับขนาดให้เหมาะกับข้อความภาษาอังกฤษ) */
+        .answers-container {
+            display: flex; width: 100%; justify-content: center; max-width: 1200px; 
+            gap: 15px; flex-direction: row; padding: 15px 0; min-height: 190px; align-items: center;
+        }
+
+        .choice-box {
+            flex: 1; padding: 30px 10px; border-radius: 25px; font-size: 2rem; font-weight: 900; 
+            text-align: center; color: white; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px); border: 3px solid rgba(255, 255, 255, 0.15);
+            position: relative; overflow: hidden;
+        }
+        #choice-0 { background: rgba(255, 0, 85, 0.4); }
+        #choice-1 { background: rgba(0, 153, 255, 0.4); }
+        #choice-2 { background: rgba(255, 170, 0, 0.4); }
+        #choice-3 { background: rgba(0, 255, 153, 0.4); }
+
+        /* หลอดชาร์จพลังสีขาวเมื่อชี้ค้างไว้ */
+        .hover-charge {
+            position: absolute; bottom: 0; left: 0; height: 100%; width: 0%;
+            background: rgba(255, 255, 255, 0.35); pointer-events: none; transition: width 0.08s linear;
+        }
+
+        .choice-box.hand-hover {
+            border-color: #ffffff !important; box-shadow: 0 0 35px #00ffff !important; transform: scale(1.06) !important;
+        }
+
+        .correct { background: linear-gradient(135deg, rgba(0, 230, 118, 0.9), rgba(0, 126, 64, 0.9)) !important; border-color: #fff !important; box-shadow: 0 0 40px #00e676 !important; transform: scale(1.05) !important; }
+        .wrong { background: rgba(239, 68, 68, 0.6) !important; border-color: rgba(255, 255, 255, 0.1) !important; transform: scale(0.95) !important; }
+
+        .choice-box span { display: block; font-size: 1.1rem; margin-bottom: 3px; color: rgba(255,255,255,0.7); font-weight: 700; }
+
+        /* เลเยอร์หน้าต่างป๊อปอัพ */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 15, 25, 0.98); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        .menu-card {
+            background: rgba(30, 41, 59, 0.95); padding: 40px 60px; border-radius: 30px;
+            border: 4px solid #00ffcc; text-align: center; box-shadow: 0 0 50px rgba(0,255,204,0.3); max-width: 550px; width: 90%;
+        }
+        .menu-card h2 { font-size: 2.8rem; margin: 0 0 15px 0; font-weight: 900; background: linear-gradient(to right, #00ffcc, #0099ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .btn-main {
+            background: linear-gradient(to right, #ff007f, #ffaa00); color: white; pointer-events: auto;
+            border: none; padding: 15px 50px; font-size: 1.6rem; font-weight: bold; border-radius: 50px; cursor: pointer; box-shadow: 0 5px 20px rgba(255,0,127,0.4);
+        }
+        .score-big { font-size: 5.5rem; font-weight: 900; color: #ffeb3b; margin: 15px 0; text-shadow: 0 0 20px rgba(255,235,59,0.3); }
+
+        @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+    </style>
+</head>
+<body>
+
+    <div class="video-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <div class="overlay" id="start-screen">
+        <div class="menu-card">
+            <div style="font-size: 4rem; margin-bottom: 10px;">🇬🇧🎯</div>
+            <h2 id="loading-status">กำลังเชื่อมต่อระบบทดสอบภาษาอังกฤษ...</h2>
+            <p style="color: #cbd5e1; margin-bottom: 30px;" id="loading-sub">เตรียมใช้นิ้วชี้แช่เพื่อเลือกคำศัพท์ภาษาอังกฤษที่ถูกต้อง (ข้อละ 15 วินาที)</p>
+            <button class="btn-main" id="start-btn" onclick="startGame()" style="display: none;">กดเริ่มรบสมรภูมิ English</button>
+        </div>
+    </div>
+
+    <div class="overlay" id="summary-screen" style="display: none;">
+        <div class="menu-card" style="border-color: #ff007f; box-shadow: 0 0 50px rgba(255,0,127,0.3);">
+            <div style="font-size: 4rem;">🏆🎉✨</div>
+            <h2>Good Job! จบเกมแล้ว</h2>
+            <div style="color: #cbd5e1; font-size: 1.2rem;">สรุปผลคะแนนภาษาอังกฤษของนักเรียน</div>
+            <div class="score-big" id="final-score">0</div>
+            <button class="btn-main" onclick="restartGame()">Play Again</button>
+        </div>
+    </div>
+
+    <div class="game-container">
+        <div class="header">
+            <h1>เกมสมรภูมิภาษาอังกฤษ AR ป.4-6 (โหมดชี้แช่ตอบ)</h1>
+            <div class="player-panel">
+                <div class="info-box round-box" id="round-text">ข้อที่: 0/10</div>
+                <div class="info-box status-box" id="timer-text">เวลา: 15.0 วิ</div>
+                <div class="info-box score-box" id="score-text">คะแนน: 0</div>
+                
+                <div class="control-panel">
+                    <button class="btn-ctrl btn-pause" id="pause-btn" onclick="togglePause()">หยุดเกม</button>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: center; width: 100%;">
+                <div class="timer-bar-container">
+                    <div class="timer-bar" id="timer-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="question-zone">
+            <div class="cat-avatar">🐱</div>
+            <div class="question-display" id="question-box">ยกมือขึ้นมาส่องกล้องเพื่อเริ่มจับเซนเซอร์ได้เลย...</div>
+        </div>
+
+        <div class="answers-container">
+            <div class="choice-box" id="choice-0"><div class="hover-charge"></div><span>A</span><div class="text">-</div></div>
+            <div class="choice-box" id="choice-1"><div class="hover-charge"></div><span>B</span><div class="text">-</div></div>
+            <div class="choice-box" id="choice-2"><div class="hover-charge"></div><span>C</span><div class="text">-</div></div>
+            <div class="choice-box" id="choice-3"><div class="hover-charge"></div><span>D</span><div class="text">-</div></div>
+        </div>
+    </div>
+
+    <script>
+        let score = 0;
+        let currentRound = 0;
+        const totalRounds = 10;
+        let timerInterval;
+        let timeLeft = 15000; 
+        let canAnswer = false;
+        let isPaused = false; 
+        const speedDuration = 15000;
+
+        let activeQuestions = []; 
+        let currentQuestionObj = null;
+        let audioCtx = null;
+
+        let currentHoveredIndex = -1;
+        let hoverStartTime = 0;
+        const requiredHoverTime = 800; 
+
+        let fireworks = [];
+
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        // คลังโจทย์ข้อสอบภาษาอังกฤษ ป.4-6 (10 ข้อพร้อมเฉลย) คุณครูสามารถมาแก้ข้อความตรงนี้เพิ่มเองได้ในอนาคตค่ะ
+        const englishQuestionsPool = [
+            { q: 'สัตว์ชนิดใดคือ "Elephant"?', choices: ['ช้าง', 'ม้า', 'ลิง', 'เสือ'], ans: 'ช้าง' },
+            { q: 'What fruit is yellow and long?', choices: ['Apple', 'Banana', 'Orange', 'Mango'], ans: 'Banana' },
+            { q: 'He _______ a good student.', choices: ['is', 'am', 'are', 'be'], ans: 'is' },
+            { q: 'I _______ watching TV now.', choices: ['is', 'am', 'are', 'was'], ans: 'am' },
+            { q: '"ค้างคาว" ภาษาอังกฤษเขียนอย่างไร?', choices: ['Cat', 'Rat', 'Bat', 'Bird'], ans: 'Bat' },
+            { q: 'Which one is a vehicle? (ยานพาหนะ)', choices: ['Car', 'Book', 'Chair', 'Pen'], ans: 'Car' },
+            { q: 'What is the opposite of "Big"? (ตรงข้ามกับใหญ่)', choices: ['Small', 'Tall', 'Short', 'Long'], ans: 'Small' },
+            { q: 'They _______ football every Sunday.', choices: ['play', 'plays', 'playing', 'played'], ans: 'play' },
+            { q: 'คำกริยา (Verb) ของประโยค "She runs fast." คือคำใด?', choices: ['She', 'runs', 'fast', 'ไม่มี'], ans: 'runs' },
+            { q: 'What color do you get from mixing Blue and Yellow?', choices: ['Red', 'Green', 'Purple', 'Pink'], ans: 'Green' }
+        ];
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playTenseBeat(isUrgent) {
+            if (!audioCtx || !canAnswer || isPaused) return;
+            try {
+                let osc = audioCtx.createOscillator();
+                let gainNode = audioCtx.createGain();
+                osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(isUrgent ? 100 : 75, audioCtx.currentTime); 
+                gainNode.gain.setValueAtTime(isUrgent ? 0.4 : 0.2, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (isUrgent ? 0.1 : 0.2));
+                osc.start(); osc.stop(audioCtx.currentTime + (isUrgent ? 0.1 : 0.2));
+            } catch(e) {}
+        }
+
+        function playSfx(type) {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator();
+            let gainNode = audioCtx.createGain();
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+            if (type === 'correct') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+                osc.frequency.exponentialRampToValueAtTime(1100, audioCtx.currentTime + 0.2); 
+                gainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            } else {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(170, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.25);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            }
+            gainNode.gain.exponentialRampToValueAtTime(0.01, applicationCache.status ? 0.01 : 0.3);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.55, minTrackingConfidence: 0.55 });
+        hands.onResults(onHandResults);
+
+        function onHandResults(results) {
+            if (canvasElement.width !== window.innerWidth || canvasElement.height !== window.innerHeight) {
+                canvasElement.width = window.innerWidth; canvasElement.height = window.innerHeight;
+            }
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.translate(canvasElement.width, 0); canvasCtx.scale(-1, 1);
+            if (results.image) canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            
+            handleFireworksAnimation();
+            canvasCtx.restore();
+
+            let activeHover = -1;
+
+            if (!isPaused && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const fingerX = (1 - landmarks[8].x) * canvasElement.width;
+                const fingerY = landmarks[8].y * canvasElement.height;
+
+                for(let pt of landmarks){
+                    let ptX = (1 - pt.x) * canvasElement.width;
+                    let ptY = pt.y * canvasElement.height;
+                    canvasCtx.beginPath(); canvasCtx.arc(ptX, ptY, 4, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = '#00ffcc'; canvasCtx.fill();
+                }
+
+                canvasCtx.font = "50px Arial";
+                canvasCtx.textAlign = "center";
+                canvasCtx.textBaseline = "middle";
+                canvasCtx.fillText("🐾", fingerX, fingerY);
+
+                if (canAnswer) {
+                    for (let i = 0; i < 4; i++) {
+                        const box = document.getElementById(`choice-${i}`);
+                        const rect = box.getBoundingClientRect();
+                        if (fingerX >= rect.left && fingerX <= rect.right && fingerY >= rect.top && fingerY <= rect.bottom) {
+                            activeHover = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (canAnswer && !isPaused) {
+                handleHoverAction(activeHover);
+            }
+        }
+
+        function handleHoverAction(hoveredIndex) {
+            for (let i = 0; i < 4; i++) {
+                const box = document.getElementById(`choice-${i}`);
+                const chargeBar = box.querySelector('.hover-charge');
+                
+                if (i === hoveredIndex) {
+                    box.classList.add('hand-hover');
+                } else {
+                    box.classList.remove('hand-hover');
+                    chargeBar.style.width = '0%';
+                }
+            }
+
+            if (hoveredIndex !== -1) {
+                if (currentHoveredIndex !== hoveredIndex) {
+                    currentHoveredIndex = hoveredIndex;
+                    hoverStartTime = Date.now();
+                } else {
+                    const elapsed = Date.now() - hoverStartTime;
+                    const percent = Math.min((elapsed / requiredHoverTime) * 100, 100);
+                    document.getElementById(`choice-${hoveredIndex}`).querySelector('.hover-charge').style.width = `${percent}%`;
+
+                    if (elapsed >= requiredHoverTime) {
+                        document.getElementById(`choice-${hoveredIndex}`).querySelector('.hover-charge').style.width = '0%';
+                        checkAnswer(hoveredIndex);
+                    }
+                }
+            } else {
+                currentHoveredIndex = -1;
+            }
+        }
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 1280, height: 720
+        });
+
+        camera.start().then(() => {
+            document.getElementById('loading-status').innerText = "สมรภูมิภาษาอังกฤษพร้อมรบแล้ว! 🇬🇧🐾";
+            document.getElementById('loading-sub').innerText = "กล้องติดเรียบร้อย กดปุ่มเพื่อพานักเรียนลุยคลังคำศัพท์ได้เลยค่ะคุณครู Meow";
+            document.getElementById('start-btn').style.display = 'inline-block';
+        }).catch(err => {
+            document.getElementById('loading-status').innerText = "โปรดอนุญาตให้เปิดใช้กล้องถ่ายรูปด้านบนช่องที่อยู่เว็บก่อนนะคะ";
+        });
+
+        function startGame() {
+            initAudio();
+            document.getElementById('start-screen').style.display = 'none';
+            restartGame();
+        }
+
+        function togglePause() {
+            if (!canAnswer) return; 
+            isPaused = !isPaused;
+            const pauseBtn = document.getElementById('pause-btn');
+            
+            if (isPaused) {
+                pauseBtn.innerText = "เล่นต่อ";
+                pauseBtn.style.background = "#00ffcc"; pauseBtn.style.color = "#0f172a";
+                clearInterval(timerInterval);
+                document.getElementById('question-box').innerText = "⏸️ Paused (หยุดชั่วคราว)";
+            } else {
+                pauseBtn.innerText = "หยุดเกม";
+                pauseBtn.style.background = "#e28743"; pauseBtn.style.color = "white";
+                document.getElementById('question-box').innerText = currentQuestionObj.q;
+                runTimerLoop(timeLeft);
+            }
+        }
+
+        function nextQuestion() {
+            currentRound++;
+            if (currentRound > totalRounds) {
+                endGame();
+                return;
+            }
+
+            document.getElementById('round-text').innerText = `ข้อที่: ${currentRound}/${totalRounds}`;
+            canAnswer = true; isPaused = false;
+            timeLeft = speedDuration; currentHoveredIndex = -1;
+
+            const pauseBtn = document.getElementById('pause-btn');
+            pauseBtn.innerText = "หยุดเกม";
+            pauseBtn.style.background = "#e28743"; pauseBtn.style.color = "white";
+            
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`choice-${i}`).className = "choice-box";
+                document.getElementById(`choice-${i}`).querySelector('.hover-charge').style.width = '0%';
+            }
+
+            currentQuestionObj = activeQuestions[currentRound - 1];
+            document.getElementById('question-box').innerText = currentQuestionObj.q;
+
+            // ผสมช้อยส์ 4 ตัวเลือก
+            let answersArray = [...currentQuestionObj.choices];
+            answersArray.sort(() => Math.random() - 0.5);
+
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`choice-${i}`).querySelector('.text').innerText = answersArray[i];
+                document.getElementById(`choice-${i}`).dataset.val = answersArray[i];
+            }
+
+            clearInterval(timerInterval);
+            runTimerLoop(speedDuration);
+        }
+
+        function runTimerLoop(durationAvailable) {
+            const startTime = Date.now();
+            const originalTimeLeft = durationAvailable;
+            let lastBeatTime = 0;
+
+            timerInterval = setInterval(() => {
+                if (isPaused) return;
+
+                const elapsed = Date.now() - startTime;
+                timeLeft = originalTimeLeft - elapsed;
+
+                if (timeLeft <= 0) {
+                    timeLeft = 0;
+                    clearInterval(timerInterval);
+                    timeOutAction();
+                }
+
+                document.getElementById('timer-text').innerText = `เวลา: ${(timeLeft / 1000).toFixed(1)} วิ`;
+                const percentage = (timeLeft / speedDuration) * 100;
+                const timerBar = document.getElementById('timer-bar');
+                timerBar.style.width = `${percentage}%`;
+
+                let beatInterval = timeLeft < 3000 ? 250 : 600; 
+                if (elapsed - lastBeatTime > beatInterval) {
+                    playTenseBeat(timeLeft < 3000);
+                    lastBeatTime = elapsed;
+                }
+
+                timerBar.style.background = percentage < 35 ? "#ff007f" : "#00ffcc";
+            }, 30);
+        }
+
+        function checkAnswer(index) {
+            if (!canAnswer) return;
+            canAnswer = false;
+            clearInterval(timerInterval);
+
+            const selectedBox = document.getElementById(`choice-${index}`);
+            const selectedValue = selectedBox.dataset.val;
+            const currentAnswer = currentQuestionObj.ans;
+
+            if (selectedValue === currentAnswer) {
+                score += 10;
+                selectedBox.className = "choice-box correct";
+                playSfx('correct');
+            } else {
+                selectedBox.className = "choice-box wrong";
+                highlightCorrectAnswer();
+                playSfx('wrong');
+            }
+
+            document.getElementById('score-text').innerText = `คะแนน: ${score}`;
+            setTimeout(nextQuestion, 2000); // เว้นจังหวะอ่านเฉลยคำศัพท์ 2 วินาทีก่อนขึ้นข้อใหม่ค่ะ
+        }
+
+        function timeOutAction() {
+            if (!canAnswer) return;
+            canAnswer = false;
+            playSfx('wrong');
+            highlightCorrectAnswer();
+            setTimeout(nextQuestion, 2000);
+        }
+
+        function highlightCorrectAnswer() {
+            const currentAnswer = currentQuestionObj.ans;
+            for (let i = 0; i < 4; i++) {
+                const box = document.getElementById(`choice-${i}`);
+                box.className = (box.dataset.val === currentAnswer) ? 'choice-box correct' : 'choice-box wrong';
+            }
+        }
+
+        function triggerFireworkSplashes() {
+            fireworks = [];
+            for (let i = 0; i < 6; i++) {
+                setTimeout(() => {
+                    let centerX = Math.random() * canvasElement.width;
+                    let centerY = Math.random() * (canvasElement.height * 0.6);
+                    let color = `hsl(${Math.random() * 360}, 100%, 60%)`;
+                    for (let p = 0; p < 25; p++) {
+                        let angle = Math.random() * Math.PI * 2;
+                        let speed = Math.random() * 4 + 2;
+                        fireworks.push({
+                            x: centerX, y: centerY,
+                            vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+                            alpha: 1, color: color
+                        });
+                    }
+                }, i * 400);
+            }
+        }
+
+        function handleFireworksAnimation() {
+            if (fireworks.length === 0) return;
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                let p = fireworks[i];
+                p.x += p.vx; p.y += p.vy; p.vy += 0.05; 
+                p.alpha -= 0.015;
+                if (p.alpha <= 0) {
+                    fireworks.splice(i, 1);
+                    continue;
+                }
+                canvasCtx.beginPath();
+                canvasCtx.arc(canvasElement.width - p.x, p.y, 4, 0, Math.PI * 2);
+                canvasCtx.fillStyle = p.color;
+                canvasCtx.globalAlpha = p.alpha;
+                canvasCtx.fill();
+                canvasCtx.globalAlpha = 1.0;
+            }
+        }
+
+        function endGame() {
+            document.getElementById('summary-screen').style.display = 'flex';
+            document.getElementById('final-score').innerText = `${score} / 100 Points`;
+            triggerFireworkSplashes();
+        }
+
+        function restartGame() {
+            score = 0; currentRound = 0; currentHoveredIndex = -1; isPaused = false; fireworks = [];
+            // ดึงโจทย์ชุดภาษาอังกฤษมาสลับตำแหน่ง
+            activeQuestions = [...englishQuestionsPool].sort(() => Math.random() - 0.5);
+            document.getElementById('score-text').innerText = `คะแนน: 0`;
+            document.getElementById('summary-screen').style.display = 'none';
+            nextQuestion();
+        }
+    </script>
+</body>
+</html>
